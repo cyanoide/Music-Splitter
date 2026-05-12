@@ -583,12 +583,30 @@ html, body {
     background: var(--bg-1);
     border-radius: var(--radius-xs);
     overflow: hidden;
+    cursor: pointer;
+}
+
+.stem-waveform-container:hover {
+    background: var(--bg-2);
 }
 
 .stem-waveform {
     width: 100%;
     height: 100%;
     display: block;
+}
+
+.stem-playhead {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1.5px;
+    height: 100%;
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent-glow);
+    pointer-events: none;
+    z-index: 2;
+    transition: left 0.05s linear;
 }
 
 .stem-volume-container {

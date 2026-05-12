@@ -140,8 +140,9 @@ function buildStemTracks(stemNames) {
                     <button class="btn-stem btn-solo" data-stem="${name}" title="Solo">S</button>
                 </div>
             </div>
-            <div class="stem-waveform-container">
+            <div class="stem-waveform-container" data-stem="${name}">
                 <canvas class="stem-waveform" data-stem="${name}"></canvas>
+                <div class="stem-playhead" data-stem="${name}"></div>
             </div>
             <div class="stem-volume-container">
                 <input type="range" class="stem-volume" data-stem="${name}" min="0" max="100" value="100">
@@ -586,6 +587,14 @@ async function initPlayer(stemBuffers) {
         if (masterWaveform && masterPeaks) {
             masterWaveform.draw(masterPeaks, progress);
         }
+        // Per-stem playhead + bar progress
+        for (const name of engine.stemOrder) {
+            const ph = $(`.stem-playhead[data-stem="${name}"]`);
+            if (ph) ph.style.left = `${progress * 100}%`;
+            const wf = stemWaveforms[name];
+            const peaks = stemPeaks[name];
+            if (wf && peaks) wf.draw(peaks, progress);
+        }
     };
 
     engine._onEnded = () => {
@@ -594,6 +603,13 @@ async function initPlayer(stemBuffers) {
         dom.playhead.style.left = '0%';
         if (masterWaveform && masterPeaks) {
             masterWaveform.draw(masterPeaks);
+        }
+        for (const name of engine.stemOrder) {
+            const ph = $(`.stem-playhead[data-stem="${name}"]`);
+            if (ph) ph.style.left = '0%';
+            const wf = stemWaveforms[name];
+            const peaks = stemPeaks[name];
+            if (wf && peaks) wf.draw(peaks);
         }
     };
 
@@ -659,6 +675,13 @@ function initEvents() {
         if (masterWaveform && masterPeaks) {
             masterWaveform.draw(masterPeaks);
         }
+        for (const name of engine.stemOrder) {
+            const ph = $(`.stem-playhead[data-stem="${name}"]`);
+            if (ph) ph.style.left = '0%';
+            const wf = stemWaveforms[name];
+            const peaks = stemPeaks[name];
+            if (wf && peaks) wf.draw(peaks);
+        }
     });
 
     dom.btnSkipBack.addEventListener('click', () => engine.skip(-5));
@@ -671,27 +694,63 @@ function initEvents() {
 
     dom.masterContainer.addEventListener('click', (e) => {
         const rect = dom.masterContainer.getBoundingClientRect();
-        const ratio = (e.clientX - rect.left) / rect.width;
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         engine.seek(ratio * engine.duration);
         if (!engine.playing) {
             dom.timeCurrent.textContent = formatTime(engine.currentTime);
             dom.playhead.style.left = `${ratio * 100}%`;
+            for (const name of engine.stemOrder) {
+                const ph = $(`.stem-playhead[data-stem="${name}"]`);
+                if (ph) ph.style.left = `${ratio * 100}%`;
+                const wf = stemWaveforms[name];
+                const peaks = stemPeaks[name];
+                if (wf && peaks) wf.draw(peaks, ratio);
+            }
+            if (masterWaveform && masterPeaks) {
+                masterWaveform.draw(masterPeaks, ratio);
+            }
         }
     });
 
     dom.stemTracks.addEventListener('click', (e) => {
+        // Priority 1 : mute/solo buttons
         const btn = e.target.closest('.btn-mute, .btn-solo');
-        if (!btn) return;
-        const stemName = btn.dataset.stem;
-        if (btn.classList.contains('btn-mute')) {
-            const muted = engine.toggleMute(stemName);
-            btn.classList.toggle('active-mute', muted);
-            btn.closest('.stem-row').classList.toggle('muted', muted);
-        } else if (btn.classList.contains('btn-solo')) {
-            const soloed = engine.toggleSolo(stemName);
-            btn.classList.toggle('active-solo', soloed);
-            btn.closest('.stem-row').classList.toggle('solo', soloed);
-            updateSoloVisuals();
+        if (btn) {
+            const stemName = btn.dataset.stem;
+            if (btn.classList.contains('btn-mute')) {
+                const muted = engine.toggleMute(stemName);
+                btn.classList.toggle('active-mute', muted);
+                btn.closest('.stem-row').classList.toggle('muted', muted);
+            } else if (btn.classList.contains('btn-solo')) {
+                const soloed = engine.toggleSolo(stemName);
+                btn.classList.toggle('active-solo', soloed);
+                btn.closest('.stem-row').classList.toggle('solo', soloed);
+                updateSoloVisuals();
+            }
+            return;
+        }
+
+        // Priority 2 : click sur waveform de stem → seek global
+        const wfContainer = e.target.closest('.stem-waveform-container');
+        if (wfContainer) {
+            const rect = wfContainer.getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            engine.seek(ratio * engine.duration);
+            if (!engine.playing) {
+                dom.timeCurrent.textContent = formatTime(engine.currentTime);
+                dom.playhead.style.left = `${ratio * 100}%`;
+                // Repercute sur tous les stems
+                for (const name of engine.stemOrder) {
+                    const ph = $(`.stem-playhead[data-stem="${name}"]`);
+                    if (ph) ph.style.left = `${ratio * 100}%`;
+                    const wf = stemWaveforms[name];
+                    const peaks = stemPeaks[name];
+                    if (wf && peaks) wf.draw(peaks, ratio);
+                }
+                if (masterWaveform && masterPeaks) {
+                    masterWaveform.draw(masterPeaks, ratio);
+                }
+            }
         }
     });
 
